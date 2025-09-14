@@ -7,8 +7,6 @@ import { useCart } from "@/context/cartContext";
 
 const Navbar = () => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [wishlist, setWishlist] = useState<any[]>([]);
-  const [cartItems, setCartItems] = useState<any[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Authentication state
@@ -19,6 +17,15 @@ const Navbar = () => {
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Use cart context - get all cart-related data and functions
+  const {
+    cartItems,
+    wishlist,
+    getTotalItems,
+    getSubtotal,
+    isLoading
+  } = useCart();
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -31,9 +38,6 @@ const Navbar = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // Function to get total items in cart
-  const { getTotalItems } = useCart();
 
   // Mock authentication functions
   const handleSignIn = (email: string, password: string) => {
@@ -219,6 +223,100 @@ const Navbar = () => {
     );
   };
 
+  // Cart Preview Component (enhanced with context data)
+  const CartPreview = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+    if (!isOpen || cartItems.length === 0) return null;
+
+    return (
+      <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Shopping Cart</h3>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">
+                {getTotalItems()} {getTotalItems() === 1 ? 'item' : 'items'}
+              </span>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3 max-h-64 overflow-y-auto">
+            {cartItems.slice(0, 3).map((item) => (
+              <div key={item.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
+                <img 
+                  src={item.image} 
+                  alt={item.name}
+                  className="w-12 h-12 object-cover rounded-md"
+                />
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium text-sm text-gray-900 truncate">
+                    {item.name}
+                  </h4>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-sm text-gray-500">
+                      Qty: {item.quantity}
+                    </span>
+                    <span className="text-sm font-medium text-amber-600">
+                      ${(item.price * item.quantity).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            {cartItems.length > 3 && (
+              <div className="text-center py-2">
+                <span className="text-sm text-gray-500">
+                  +{cartItems.length - 3} more {cartItems.length - 3 === 1 ? 'item' : 'items'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-gray-200 mt-4 pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-base font-semibold text-gray-900">Subtotal:</span>
+              <span className="text-lg font-bold text-amber-600">
+                ${getSubtotal().toFixed(2)}
+              </span>
+            </div>
+            
+            <div className="space-y-2">
+              <Link href="/cart" onClick={onClose}>
+                <button className="w-full bg-amber-600 text-white py-2 px-4 rounded-lg hover:bg-amber-700 transition font-medium">
+                  View Cart
+                </button>
+              </Link>
+              <Link href="/checkout" onClick={onClose}>
+                <button className="w-full bg-gray-900 text-white py-2 px-4 rounded-lg hover:bg-gray-800 transition font-medium">
+                  Checkout
+                </button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // State for cart preview
+  const [showCartPreview, setShowCartPreview] = useState(false);
+  const cartRef = useRef<HTMLDivElement>(null);
+
+  // Close cart preview when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (cartRef.current && !cartRef.current.contains(event.target as Node)) {
+        setShowCartPreview(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   return (
     <>
       <header className="sticky top-0 z-30 bg-white border-b border-gray-200">
@@ -357,27 +455,41 @@ const Navbar = () => {
               </div>
 
               {/* Wishlist */}
-              <button className="text-gray-700 hover:text-amber-600 transition relative">
+              <Link href="/wishlist" className="text-gray-700 hover:text-amber-600 transition relative">
                 <Heart className="h-6 w-6" />
                 {wishlist.length > 0 && (
                   <span className="absolute -top-2 -right-2 bg-amber-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
                     {wishlist.length}
                   </span>
                 )}
-              </button>
-
-              {/* Shopping Cart */}
-            <Link
-                href="/cart"
-                className="text-gray-700 hover:text-amber-600 transition relative"
-              >
-                <ShoppingCart className="h-6 w-6" />
-                {getTotalItems() > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-amber-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium curosor-pointer">
-                    {getTotalItems()}
-                  </span>
-                )}
               </Link>
+
+              {/* Shopping Cart with Enhanced Preview */}
+              <div className="relative" ref={cartRef}>
+                <button
+                  onClick={() => setShowCartPreview(!showCartPreview)}
+                  className="text-gray-700 hover:text-amber-600 transition relative group"
+                >
+                  <ShoppingCart className="h-6 w-6" />
+                  {getTotalItems() > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-amber-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium animate-pulse group-hover:animate-none">
+                      {getTotalItems()}
+                    </span>
+                  )}
+                  {/* Loading indicator */}
+                  {isLoading && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3">
+                      <div className="animate-spin rounded-full h-3 w-3 border border-amber-600 border-t-transparent"></div>
+                    </div>
+                  )}
+                </button>
+
+                {/* Cart Preview Dropdown */}
+                <CartPreview 
+                  isOpen={showCartPreview} 
+                  onClose={() => setShowCartPreview(false)} 
+                />
+              </div>
 
               {/* Mobile Menu Button */}
               <button
@@ -389,6 +501,85 @@ const Navbar = () => {
             </div>
           </div>
         </div>
+
+        {/* Mobile Menu Overlay */}
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <div className="fixed inset-0 bg-black bg-opacity-25" onClick={() => setMobileMenuOpen(false)} />
+            <div className="relative flex flex-col w-full max-w-xs ml-auto h-full bg-white shadow-xl">
+              <div className="flex items-center justify-between px-4 py-6 bg-amber-600">
+                <div className="flex items-center">
+                  <Sofa className="h-8 w-8 text-white" />
+                  <span className="ml-2 text-xl font-bold text-white">SteonInterior</span>
+                </div>
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-white hover:text-gray-200"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="flex-1 px-4 py-6 space-y-6">
+                <nav className="space-y-4">
+                  <Link href="/shop" className="block text-gray-900 font-medium" onClick={() => setMobileMenuOpen(false)}>
+                    Shop All
+                  </Link>
+                  <Link href="/furniture" className="block text-gray-600" onClick={() => setMobileMenuOpen(false)}>
+                    Furniture
+                  </Link>
+                  <Link href="/lighting" className="block text-gray-600" onClick={() => setMobileMenuOpen(false)}>
+                    Lighting
+                  </Link>
+                  <Link href="/decor" className="block text-gray-600" onClick={() => setMobileMenuOpen(false)}>
+                    Decor
+                  </Link>
+                  <Link href="/services" className="block text-gray-600" onClick={() => setMobileMenuOpen(false)}>
+                    Design Services
+                  </Link>
+                  <Link href="/sale" className="block text-red-600 font-medium" onClick={() => setMobileMenuOpen(false)}>
+                    Sale
+                  </Link>
+                </nav>
+
+                <div className="border-t border-gray-200 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <Link href="/wishlist" className="flex items-center text-gray-700" onClick={() => setMobileMenuOpen(false)}>
+                      <Heart className="h-5 w-5 mr-2" />
+                      Wishlist ({wishlist.length})
+                    </Link>
+                    <Link href="/cart" className="flex items-center text-gray-700" onClick={() => setMobileMenuOpen(false)}>
+                      <ShoppingCart className="h-5 w-5 mr-2" />
+                      Cart ({getTotalItems()})
+                    </Link>
+                  </div>
+
+                  {/* Cart Summary in Mobile Menu */}
+                  {cartItems.length > 0 && (
+                    <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                      <h3 className="font-medium text-gray-900 mb-2">Cart Summary</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span>Items:</span>
+                          <span>{getTotalItems()}</span>
+                        </div>
+                        <div className="flex justify-between text-sm font-medium">
+                          <span>Subtotal:</span>
+                          <span>${getSubtotal().toFixed(2)}</span>
+                        </div>
+                      </div>
+                      <Link href="/cart" onClick={() => setMobileMenuOpen(false)}>
+                        <button className="w-full mt-3 bg-amber-600 text-white py-2 rounded-lg font-medium">
+                          View Cart
+                        </button>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Auth Modal */}

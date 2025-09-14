@@ -1,34 +1,69 @@
 "use client";
 
-import { ShoppingCart, Trash2, Plus, Minus, Heart, ArrowLeft, Tag, Truck } from "lucide-react";
+import { ShoppingCart, Trash2, Plus, Minus, Heart, ArrowLeft, Tag, Truck, X, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useCart } from "@/context/cartContext";
 
 export default function CartPage() {
-  const { cartItems, updateQuantity, removeFromCart, moveToWishlist } = useCart();
+  const {
+    cartItems,
+    updateQuantity,
+    removeFromCart,
+    moveToWishlist,
+    clearCart,
+    applyPromoCode,
+    removePromoCode,
+    currentPromoCode,
+    getTotalItems,
+    getSubtotal,
+    getDiscount,
+    getTax,
+    getTotal,
+    getTotalSavings,
+    isLoading
+  } = useCart();
 
-  const [promoCode, setPromoCode] = useState("");
-  const [promoApplied, setPromoApplied] = useState(false);
+  const [promoCodeInput, setPromoCodeInput] = useState("");
+  const [promoError, setPromoError] = useState("");
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  const getSubtotal = () =>
-    cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const handleApplyPromoCode = () => {
+    setPromoError("");
+    if (!promoCodeInput.trim()) {
+      setPromoError("Please enter a promo code");
+      return;
+    }
 
-  const getDiscount = () => (promoApplied ? getSubtotal() * 0.1 : 0);
-  const getTax = () => (getSubtotal() - getDiscount()) * 0.08;
-  const getTotal = () => getSubtotal() - getDiscount() + getTax();
-
-  const getTotalSavings = () =>
-    cartItems.reduce(
-      (acc, item) =>
-        acc + ((item.originalPrice ?? item.price) - item.price) * item.quantity,
-      0
-    );
-
-  const applyPromoCode = () => {
-    if (promoCode.toUpperCase() === "SAVE10") {
-      setPromoApplied(true);
+    const success = applyPromoCode(promoCodeInput.trim());
+    if (success) {
+      setPromoCodeInput("");
+      setPromoError("");
+    } else {
+      setPromoError("Invalid promo code. Try SAVE10, SAVE20, or FLAT5");
     }
   };
+
+  const handleRemovePromoCode = () => {
+    removePromoCode();
+    setPromoError("");
+  };
+
+  const handleClearCart = () => {
+    clearCart();
+    setShowClearConfirm(false);
+  };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="flex items-center gap-3">
+          <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+          <span className="text-lg">Loading your cart...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -41,10 +76,20 @@ export default function CartPage() {
               Continue Shopping
             </button>
           </div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <ShoppingCart className="h-8 w-8 text-amber-600" />
-            Shopping Cart ({cartItems.length})
-          </h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+              <ShoppingCart className="h-8 w-8 text-amber-600" />
+              Shopping Cart ({getTotalItems()})
+            </h1>
+            {cartItems.length > 0 && (
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                className="text-sm text-gray-500 hover:text-red-600 transition-colors"
+              >
+                Clear Cart
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Savings Banner */}
@@ -55,6 +100,26 @@ export default function CartPage() {
               <span className="font-semibold">
                 You're saving ${getTotalSavings().toFixed(2)} on this order!
               </span>
+            </div>
+          </div>
+        )}
+
+        {/* Applied Promo Code Banner */}
+        {currentPromoCode && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-blue-800">
+                <Tag className="h-5 w-5" />
+                <span className="font-semibold">
+                  Promo code "{currentPromoCode}" applied - Save ${getDiscount().toFixed(2)}
+                </span>
+              </div>
+              <button
+                onClick={handleRemovePromoCode}
+                className="text-blue-600 hover:text-blue-800 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
           </div>
         )}
@@ -74,7 +139,7 @@ export default function CartPage() {
             <div className="lg:col-span-2 space-y-4">
               {cartItems.map((item) => (
                 <div
-                  key={item.id}
+                  key={`${item.id}-${JSON.stringify(item.variant)}`} // Better key for variants
                   className={`bg-white border rounded-xl p-6 shadow-sm transition-all duration-300 hover:shadow-md ${
                     !item.inStock ? "border-red-200 bg-red-50" : ""
                   }`}
@@ -103,6 +168,23 @@ export default function CartPage() {
                         <div>
                           <h3 className="font-semibold text-lg text-gray-900">{item.name}</h3>
                           <p className="text-sm text-gray-500">{item.category}</p>
+                          
+                          {/* Product Variants */}
+                          {item.variant && (
+                            <div className="flex gap-2 mt-1">
+                              {item.variant.size && (
+                                <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                  Size: {item.variant.size}
+                                </span>
+                              )}
+                              {item.variant.color && (
+                                <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                  Color: {item.variant.color}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          
                           {!item.inStock && (
                             <p className="text-red-600 text-sm font-medium mt-1">Out of Stock</p>
                           )}
@@ -180,29 +262,34 @@ export default function CartPage() {
               ))}
 
               {/* Promo Code Section */}
-              <div className="bg-white border rounded-xl p-6 shadow-sm">
-                <h3 className="font-semibold mb-4">Promo Code</h3>
-                <div className="flex gap-3">
-                  <input
-                    type="text"
-                    value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value)}
-                    placeholder="Enter promo code (try SAVE10)"
-                    className="flex-grow px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    disabled={promoApplied}
-                  />
-                  <button
-                    onClick={applyPromoCode}
-                    disabled={!promoCode || promoApplied}
-                    className="px-6 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {promoApplied ? "Applied" : "Apply"}
-                  </button>
+              {!currentPromoCode && (
+                <div className="bg-white border rounded-xl p-6 shadow-sm">
+                  <h3 className="font-semibold mb-4">Promo Code</h3>
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      value={promoCodeInput}
+                      onChange={(e) => {
+                        setPromoCodeInput(e.target.value);
+                        setPromoError(""); // Clear error when typing
+                      }}
+                      placeholder="Enter promo code (try SAVE10, SAVE20, or FLAT5)"
+                      className="flex-grow px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      onKeyPress={(e) => e.key === 'Enter' && handleApplyPromoCode()}
+                    />
+                    <button
+                      onClick={handleApplyPromoCode}
+                      disabled={!promoCodeInput.trim()}
+                      className="px-6 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                  {promoError && (
+                    <p className="text-red-600 text-sm mt-2">⚠️ {promoError}</p>
+                  )}
                 </div>
-                {promoApplied && (
-                  <p className="text-green-600 text-sm mt-2">✓ Promo code applied successfully!</p>
-                )}
-              </div>
+              )}
             </div>
 
             {/* Order Summary */}
@@ -211,19 +298,19 @@ export default function CartPage() {
 
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between">
-                  <span>Subtotal ({cartItems.length} items)</span>
+                  <span>Subtotal ({getTotalItems()} items)</span>
                   <span>${getSubtotal().toFixed(2)}</span>
                 </div>
 
-                {promoApplied && (
+                {getDiscount() > 0 && (
                   <div className="flex justify-between text-green-600">
-                    <span>Promo Discount (SAVE10)</span>
+                    <span>Promo Discount ({currentPromoCode})</span>
                     <span>-${getDiscount().toFixed(2)}</span>
                   </div>
                 )}
 
                 <div className="flex justify-between">
-                  <span>Tax</span>
+                  <span>Tax (8%)</span>
                   <span>${getTax().toFixed(2)}</span>
                 </div>
 
@@ -232,14 +319,16 @@ export default function CartPage() {
                     <Truck className="h-4 w-4" />
                     Shipping
                   </span>
-                  <span className="text-green-600 font-medium">Free</span>
+                  <span className="text-green-600 font-medium">
+                    {getSubtotal() >= 100 ? 'Free' : '$9.99'}
+                  </span>
                 </div>
               </div>
 
               <div className="border-t pt-4 mb-6">
                 <div className="flex justify-between font-bold text-xl">
                   <span>Total</span>
-                  <span>${getTotal().toFixed(2)}</span>
+                  <span>${(getTotal() + (getSubtotal() < 100 ? 9.99 : 0)).toFixed(2)}</span>
                 </div>
                 {getTotalSavings() > 0 && (
                   <p className="text-sm text-green-600 mt-1">
@@ -249,7 +338,7 @@ export default function CartPage() {
               </div>
 
               <button
-                className="w-full bg-amber-600 text-white py-4 rounded-lg font-semibold hover:bg-amber-700 transition-colors transform hover:scale-[1.02] active:scale-[0.98] mb-4"
+                className="w-full bg-amber-600 text-white py-4 rounded-lg font-semibold hover:bg-amber-700 transition-colors transform hover:scale-[1.02] active:scale-[0.98] mb-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                 disabled={cartItems.some((item) => !item.inStock)}
               >
                 {cartItems.some((item) => !item.inStock)
@@ -260,11 +349,40 @@ export default function CartPage() {
               <div className="text-center space-y-2">
                 <p className="text-sm text-gray-600 flex items-center justify-center gap-1">
                   <Truck className="h-4 w-4" />
-                  Free shipping on orders over $100
+                  {getSubtotal() >= 100 
+                    ? 'Free shipping included!' 
+                    : `Add $${(100 - getSubtotal()).toFixed(2)} for free shipping`
+                  }
                 </p>
                 <p className="text-xs text-gray-500">
                   Secure checkout with SSL encryption
                 </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Clear Cart Confirmation Modal */}
+        {showClearConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full">
+              <h3 className="text-lg font-semibold mb-4">Clear Cart</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to remove all items from your cart? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowClearConfirm(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleClearCart}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Clear Cart
+                </button>
               </div>
             </div>
           </div>
