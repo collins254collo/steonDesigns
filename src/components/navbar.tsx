@@ -1,247 +1,488 @@
 "use client";
 
-import { Sofa, Search, Heart, ShoppingCart, Menu, User, LogOut, Settings, Package, Users, Mail, Lock, Eye, EyeOff, X, Phone, UserPlus } from "lucide-react";
+import { Sofa, Search, Heart, ShoppingCart, Menu, User, LogOut, Settings, Package, Users, Mail, Lock, Eye, EyeOff, X, Phone, UserPlus, CheckCircle } from "lucide-react";
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/context/cartContext";
 
 const Navbar = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const router = useRouter();
   
-  // Authentication state
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; phone: string } | null>(null);
-  const [showAuthDropdown, setShowAuthDropdown] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
-  
-  const dropdownRef = useRef<HTMLDivElement>(null);
+// Authentication state
+const [isAuthenticated, setIsAuthenticated] = useState(false);
+const [currentUser, setCurrentUser] = useState<{ name: string; email: string; phone: string } | null>(null);
+const [showAuthDropdown, setShowAuthDropdown] = useState(false);
+const [showAuthModal, setShowAuthModal] = useState(false);
+const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+const [authLoading, setAuthLoading] = useState(false);
+const [authError, setAuthError] = useState<string | null>(null);
+const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
-  // Use cart context - get all cart-related data and functions
-  const {
-    cartItems,
-    wishlist,
-    getTotalItems,
-    getSubtotal,
-    isLoading
-  } = useCart();
+const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowAuthDropdown(false);
-      }
-    };
+// Use cart context - get all cart-related data and functions
+const {
+  cartItems,
+  wishlist,
+  getTotalItems,
+  getSubtotal,
+  isLoading
+} = useCart();
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+// Backend API URLs - replace with your actual backend URLs
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const SIGNUP_URL = `${API_BASE_URL}/users/register`;
+const SIGNIN_URL = `${API_BASE_URL}/users/login`;
 
-  // Mock authentication functions - updated to include phone
-  const handleSignIn = (email: string, password: string) => {
-    // Mock sign in logic
-    setCurrentUser({ name: "John Doe", email, phone: "+1234567890" });
-    setIsAuthenticated(true);
-    setShowAuthModal(false);
+
+// Close dropdown when clicking outside
+useEffect(() => {
+  const handleClickOutside = (event: MouseEvent) => {
+    if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      setShowAuthDropdown(false);
+    }
   };
 
-  const handleSignUp = (name: string, email: string, password: string, phone: string) => {
-    // Mock sign up logic
-    setCurrentUser({ name, email, phone });
-    setIsAuthenticated(true);
-    setShowAuthModal(false);
-  };
+  document.addEventListener('mousedown', handleClickOutside);
+  return () => document.removeEventListener('mousedown', handleClickOutside);
+}, []);
 
-  const handleLogOut = () => {
+// Check for existing auth token on component mount
+useEffect(() => {
+  const token = localStorage.getItem('authToken');
+  const userData = localStorage.getItem('userData');
+  
+  if (token && userData) {
+    try {
+      const parsedUserData = JSON.parse(userData);
+      setCurrentUser(parsedUserData);
+      setIsAuthenticated(true);
+      // Optionally verify token with backend
+      verifyToken(token);
+    } catch (error) {
+      // Invalid stored data, remove it
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('userData');
+    }
+  }
+}, []);
+
+// Optional: Verify token with backend
+const verifyToken = async (token: string) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/verify`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const userData = {
+        name: data.user.name,
+        email: data.user.email,
+        phone: data.user.phone
+      };
+      setCurrentUser(userData);
+      setIsAuthenticated(true);
+      // Update localStorage with fresh data
+      localStorage.setItem('userData', JSON.stringify(userData));
+    } else {
+      // Token is invalid, remove it
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('userData');
+      setCurrentUser(null);
+      setIsAuthenticated(false);
+    }
+  } catch (error) {
+    // Token verification failed, remove it
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userData');
     setCurrentUser(null);
     setIsAuthenticated(false);
-    setShowAuthDropdown(false);
+  }
+};
+
+// Enhanced authentication functions with backend integration
+const handleSignIn = async (email: string, password: string) => {
+  setAuthLoading(true);
+  setAuthError(null);
+  
+  try {
+    const response = await fetch(SIGNIN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Sign in failed');
+    }
+
+    const data = await response.json();
+    
+    // Store JWT token if provided
+    if (data.token) {
+      localStorage.setItem('authToken', data.token);
+    }
+    
+    // Set user data
+    const userData = {
+      name: data.user.name,
+      email: data.user.email,
+      phone: data.user.phone
+    };
+    
+    setCurrentUser(userData);
+    localStorage.setItem('userData', JSON.stringify(userData));
+    setIsAuthenticated(true);
+    
+    // Show success message
+    setShowSuccessMessage(true);
+    
+    // Close modal and redirect after a brief delay
+    setTimeout(() => {
+      setShowAuthModal(false);
+      setShowSuccessMessage(false);
+      router.push('/'); // Redirect to home page
+    }, 1500);
+    
+  } catch (error) {
+    setAuthError(error instanceof Error ? error.message : 'Sign in failed');
+  } finally {
+    setAuthLoading(false);
+  }
+};
+
+const handleSignUp = async (name: string, email: string, password: string, phone: string) => {
+  setAuthLoading(true);
+  setAuthError(null);
+  
+  try {
+    const response = await fetch(SIGNUP_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, email, password, phone }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Sign up failed');
+    }
+
+    const data = await response.json();
+    
+    // Store JWT token if provided
+    if (data.token) {
+      localStorage.setItem('authToken', data.token);
+    }
+    
+    // Set user data
+    const userData = {
+      name: data.user.name,
+      email: data.user.email,
+      phone: data.user.phone
+    };
+    
+    setCurrentUser(userData);
+    localStorage.setItem('userData', JSON.stringify(userData));
+    setIsAuthenticated(true);
+    
+    // Show success message
+    setShowSuccessMessage(true);
+    
+    // Close modal and redirect after a brief delay
+    setTimeout(() => {
+      setShowAuthModal(false);
+      setShowSuccessMessage(false);
+      router.push('/'); // Redirect to home page
+    }, 1500);
+    
+  } catch (error) {
+    setAuthError(error instanceof Error ? error.message : 'Sign up failed');
+  } finally {
+    setAuthLoading(false);
+  }
+};
+
+const handleLogOut = () => {
+  // Remove token and user data from localStorage
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('userData');
+  
+  // Clear user state
+  setCurrentUser(null);
+  setIsAuthenticated(false);
+  setShowAuthDropdown(false);
+  setAuthError(null);
+  
+  // Redirect to home page
+  router.push('/');
+};
+
+// Get user's first name for display
+const getUserDisplayName = () => {
+  if (!currentUser?.name) return '';
+  return currentUser.name.split(' ')[0]; // Get first name only
+};
+
+const AuthModal = () => {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    phone: ''
+  });
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (authMode === 'signin') {
+      await handleSignIn(formData.email, formData.password);
+    } else {
+      await handleSignUp(formData.name, formData.email, formData.password, formData.phone);
+    }
   };
 
-  const AuthModal = () => {
-    const [formData, setFormData] = useState({
-      name: '',
-      email: '',
-      password: '',
-      phone: ''
-    });
-    const [showPassword, setShowPassword] = useState(false);
+  const resetForm = () => {
+    setFormData({ name: '', email: '', password: '', phone: '' });
+    setAuthError(null);
+  };
 
-    const handleSubmit = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (authMode === 'signin') {
-        handleSignIn(formData.email, formData.password);
-      } else {
-        handleSignUp(formData.name, formData.email, formData.password, formData.phone);
-      }
-    };
+  const switchAuthMode = () => {
+    setAuthMode(authMode === 'signin' ? 'signup' : 'signin');
+    resetForm();
+  };
 
-    if (!showAuthModal) return null;
+  if (!showAuthModal) return null;
 
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-          <div className="p-4 sm:p-6">
-            <div className="flex justify-between items-center mb-4 sm:mb-6">
-              <div className="flex items-center space-x-2">
-                {authMode === 'signin' ? (
-                  <User className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
-                ) : (
-                  <UserPlus className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
-                )}
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-                  {authMode === 'signin' ? 'Welcome Back' : 'Create Account'}
-                </h2>
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="p-4 sm:p-6">
+          {/* Success Message */}
+          {showSuccessMessage && (
+            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center space-x-3">
+              <CheckCircle className="h-6 w-6 text-green-600" />
+              <div>
+                <p className="text-green-800 font-medium">
+                  {authMode === 'signin' ? 'Welcome back!' : 'Account created successfully!'}
+                </p>
+                <p className="text-green-600 text-sm">
+                  Redirecting to home page...
+                </p>
               </div>
-              <button
-                onClick={() => setShowAuthModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition p-1"
-              >
-                <X className="h-5 w-5" />
-              </button>
             </div>
-            
-            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-              {authMode === 'signup' && (
-                <div>
-                  <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-2">
-                    <User className="h-4 w-4" />
-                    <span>Full Name</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    className="w-full px-3 py-2 sm:px-4 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 focus:border-transparent transition text-sm sm:text-base"
-                    placeholder="Enter your full name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  />
-                </div>
+          )}
+
+          <div className="flex justify-between items-center mb-4 sm:mb-6">
+            <div className="flex items-center space-x-2">
+              {authMode === 'signin' ? (
+                <User className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
+              ) : (
+                <UserPlus className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
               )}
-              
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+                {authMode === 'signin' ? 'Welcome Back' : 'Create Account'}
+              </h2>
+            </div>
+            <button
+              onClick={() => {
+                setShowAuthModal(false);
+                resetForm();
+                setShowSuccessMessage(false);
+              }}
+              className="text-gray-400 hover:text-gray-600 transition p-1"
+              disabled={authLoading || showSuccessMessage}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Error Message */}
+          {authError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-800 text-sm">{authError}</p>
+            </div>
+          )}
+          
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+            {authMode === 'signup' && (
               <div>
                 <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-2">
-                  <Mail className="h-4 w-4" />
-                  <span>Email Address</span>
+                  <User className="h-4 w-4" />
+                  <span>Full Name</span>
                 </label>
                 <input
-                  type="email"
+                  type="text"
                   required
                   className="w-full px-3 py-2 sm:px-4 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 focus:border-transparent transition text-sm sm:text-base"
-                  placeholder="Enter your email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="Enter your full name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  disabled={authLoading || showSuccessMessage}
                 />
               </div>
+            )}
+            
+            <div>
+              <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-2">
+                <Mail className="h-4 w-4" />
+                <span>Email Address</span>
+              </label>
+              <input
+                type="email"
+                required
+                className="w-full px-3 py-2 sm:px-4 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 focus:border-transparent transition text-sm sm:text-base"
+                placeholder="Enter your email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                disabled={authLoading || showSuccessMessage}
+              />
+            </div>
 
-              {authMode === 'signup' && (
-                <div>
-                  <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-2">
-                    <Phone className="h-4 w-4" />
-                    <span>Phone Number</span>
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    className="w-full px-3 py-2 sm:px-4 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 focus:border-transparent transition text-sm sm:text-base"
-                    placeholder="Enter your phone number"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  />
-                </div>
-              )}
-              
+            {authMode === 'signup' && (
               <div>
                 <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-2">
-                  <Lock className="h-4 w-4" />
-                  <span>Password</span>
+                  <Phone className="h-4 w-4" />
+                  <span>Phone Number</span>
                 </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    className="w-full px-3 py-2 sm:px-4 sm:py-3 pr-10 sm:pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 focus:border-transparent transition text-sm sm:text-base"
-                    placeholder="Enter your password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4 sm:h-5 sm:w-5" /> : <Eye className="h-4 w-4 sm:h-5 sm:w-5" />}
-                  </button>
+                <input
+                  type="tel"
+                  required
+                  className="w-full px-3 py-2 sm:px-4 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 focus:border-transparent transition text-sm sm:text-base"
+                  placeholder="Enter your phone number"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  disabled={authLoading || showSuccessMessage}
+                />
+              </div>
+            )}
+            
+            <div>
+              <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-2">
+                <Lock className="h-4 w-4" />
+                <span>Password</span>
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  className="w-full px-3 py-2 sm:px-4 sm:py-3 pr-10 sm:pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 focus:border-transparent transition text-sm sm:text-base"
+                  placeholder="Enter your password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  disabled={authLoading || showSuccessMessage}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  disabled={authLoading || showSuccessMessage}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4 sm:h-5 sm:w-5" /> : <Eye className="h-4 w-4 sm:h-5 sm:w-5" />}
+                </button>
+              </div>
+            </div>
+            
+            <button
+              type="submit"
+              disabled={authLoading || showSuccessMessage}
+              className="w-full bg-amber-600 text-white py-2 sm:py-3 px-4 rounded-lg hover:bg-amber-700 transition font-medium flex items-center justify-center space-x-2 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {authLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  <span>{authMode === 'signin' ? 'Signing In...' : 'Creating Account...'}</span>
+                </>
+              ) : showSuccessMessage ? (
+                <>
+                  <CheckCircle className="h-4 w-4" />
+                  <span>Success!</span>
+                </>
+              ) : authMode === 'signin' ? (
+                <>
+                  <User className="h-4 w-4" />
+                  <span>Sign In</span>
+                </>
+              ) : (
+                <>
+                  <UserPlus className="h-4 w-4" />
+                  <span>Create Account</span>
+                </>
+              )}
+            </button>
+          </form>
+          
+          {!showSuccessMessage && (
+            <>
+              <div className="mt-4 sm:mt-6 text-center">
+                <button
+                  onClick={switchAuthMode}
+                  className="text-amber-600 hover:text-amber-700 text-sm font-medium"
+                  disabled={authLoading}
+                >
+                  {authMode === 'signin' 
+                    ? "Don't have an account? Sign up" 
+                    : "Already have an account? Sign in"
+                  }
+                </button>
+              </div>
+              
+              {/* Social divider */}
+              <div className="mt-4 sm:mt-6 relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">Or continue with</span>
                 </div>
               </div>
               
-              <button
-                type="submit"
-                className="w-full bg-amber-600 text-white py-2 sm:py-3 px-4 rounded-lg hover:bg-amber-700 transition font-medium flex items-center justify-center space-x-2 text-sm sm:text-base"
-              >
-                {authMode === 'signin' ? (
-                  <>
-                    <User className="h-4 w-4" />
-                    <span>Sign In</span>
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="h-4 w-4" />
-                    <span>Create Account</span>
-                  </>
-                )}
-              </button>
-            </form>
-            
-            <div className="mt-4 sm:mt-6 text-center">
-              <button
-                onClick={() => setAuthMode(authMode === 'signin' ? 'signup' : 'signin')}
-                className="text-amber-600 hover:text-amber-700 text-sm font-medium"
-              >
-                {authMode === 'signin' 
-                  ? "Don't have an account? Sign up" 
-                  : "Already have an account? Sign in"
-                }
-              </button>
-            </div>
-            
-            {/* Social divider */}
-            <div className="mt-4 sm:mt-6 relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
+              {/* Social buttons */}
+              <div className="mt-3 sm:mt-4 grid grid-cols-2 gap-2 sm:gap-3">
+                <button 
+                  className="flex items-center justify-center px-3 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
+                  disabled={authLoading}
+                >
+                  <svg className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" viewBox="0 0 24 24">
+                    <path fill="#4285f4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34a853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#fbbc05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#ea4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                  <span className="hidden sm:inline">Google</span>
+                  <span className="sm:hidden">G</span>
+                </button>
+                <button 
+                  className="flex items-center justify-center px-3 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
+                  disabled={authLoading}
+                >
+                  <svg className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" fill="#1877f2" viewBox="0 0 24 24">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                  </svg>
+                  <span className="hidden sm:inline">Facebook</span>
+                  <span className="sm:hidden">F</span>
+                </button>
               </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Or continue with</span>
-              </div>
-            </div>
-            
-            {/* Social buttons */}
-            <div className="mt-3 sm:mt-4 grid grid-cols-2 gap-2 sm:gap-3">
-              <button className="flex items-center justify-center px-3 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
-                <svg className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" viewBox="0 0 24 24">
-                  <path fill="#4285f4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34a853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#fbbc05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="#ea4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                <span className="hidden sm:inline">Google</span>
-                <span className="sm:hidden">G</span>
-              </button>
-              <button className="flex items-center justify-center px-3 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
-                <svg className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" fill="#1877f2" viewBox="0 0 24 24">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                </svg>
-                <span className="hidden sm:inline">Facebook</span>
-                <span className="sm:hidden">F</span>
-              </button>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   // Cart Preview Component (enhanced with context data)
   const CartPreview = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
@@ -405,11 +646,14 @@ const Navbar = () => {
                   <div>
                     <button
                       onClick={() => setShowAuthDropdown(!showAuthDropdown)}
-                      className="flex items-center space-x-1 sm:space-x-2 text-gray-700 hover:text-amber-600 transition"
+                      className="flex items-center space-x-1 sm:space-x-2 text-gray-700 hover:text-amber-600 transition bg-amber-50 hover:bg-amber-100 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-amber-200"
                     >
-                      <User className="h-5 w-5 sm:h-6 sm:w-6" />
-                      <span className="hidden md:block font-medium text-sm">
-                        {currentUser?.name}
+                      <User className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
+                      <span className="hidden md:block font-medium text-sm text-gray-900">
+                        Hi, {getUserDisplayName()}
+                      </span>
+                      <span className="md:hidden font-medium text-sm text-gray-900">
+                        {getUserDisplayName()}
                       </span>
                     </button>
                     
@@ -425,6 +669,7 @@ const Navbar = () => {
                         <Link
                           href="/profile"
                           className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          onClick={() => setShowAuthDropdown(false)}
                         >
                           <User className="h-4 w-4 mr-2" />
                           Profile
@@ -432,6 +677,7 @@ const Navbar = () => {
                         <Link
                           href="/orders"
                           className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          onClick={() => setShowAuthDropdown(false)}
                         >
                           <Package className="h-4 w-4 mr-2" />
                           Orders
@@ -439,6 +685,7 @@ const Navbar = () => {
                         <Link
                           href="/settings"
                           className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          onClick={() => setShowAuthDropdown(false)}
                         >
                           <Settings className="h-4 w-4 mr-2" />
                           Settings
@@ -657,9 +904,12 @@ const Navbar = () => {
 
                   {isAuthenticated && (
                     <div className="space-y-3">
-                      <div className="bg-gray-50 rounded-lg p-3">
-                        <p className="text-sm font-medium text-gray-900">{currentUser?.name}</p>
-                        <p className="text-xs text-gray-500">{currentUser?.email}</p>
+                      <div className="bg-amber-50 rounded-lg p-3 border border-amber-200">
+                        <p className="text-sm font-medium text-gray-900 flex items-center">
+                          <User className="h-4 w-4 mr-2 text-amber-600" />
+                          Welcome, {getUserDisplayName()}!
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">{currentUser?.email}</p>
                         {currentUser?.phone && (
                           <p className="text-xs text-gray-500">{currentUser?.phone}</p>
                         )}
