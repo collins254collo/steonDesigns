@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { 
   ShoppingBag, 
   Search, 
@@ -21,13 +20,12 @@ import {
   Truck,
   RotateCcw,
   Shield,
-  ArrowUpDown,
   Check,
   Tag,
-  Zap,
-  Link
+  AlertCircle,
+  Loader2,
+  User
 } from "lucide-react";
-import { useCart } from "@/context/cartContext";
 
 interface Product {
   id: string;
@@ -51,6 +49,21 @@ interface Product {
   features: string[];
 }
 
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  originalPrice?: number;
+  image: string;
+  category: string;
+  quantity: number;
+  inStock: boolean;
+  variant?: {
+    color?: string;
+    size?: string;
+  };
+}
+
 interface CartNotification {
   id: string;
   product: Product;
@@ -58,23 +71,119 @@ interface CartNotification {
   timestamp: number;
 }
 
-export default function EnhancedShopPage() {
-  // Use cart context instead of local state
-  const {
-    cartItems,
-    wishlist,
-    addToCart,
-    removeFromCart,
-    updateQuantity,
-    moveToWishlist,
-    removeFromWishlist,
-    moveToCart,
-    getTotalItems,
-    getSubtotal,
-    isLoading
-  } = useCart();
+// Enhanced API Service for backend communication
+class CartApiService {
+  private static baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+  
+  // Mock implementation - replace with actual API calls
+  static async addToCart(userId: string, item: CartItem): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Mock success response
+      return { 
+        success: true, 
+        data: { 
+          message: 'Item added to cart',
+          item: item 
+        } 
+      };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to add item to cart' 
+      };
+    }
+  }
 
-  // Local state for shop functionality
+  static async updateCartItem(userId: string, productId: string, quantity: number): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return { 
+        success: true, 
+        data: { 
+          message: 'Item updated',
+          productId,
+          quantity 
+        } 
+      };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to update cart item' 
+      };
+    }
+  }
+
+  static async removeFromCart(userId: string, productId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return { 
+        success: true, 
+        data: { 
+          message: 'Item removed',
+          productId 
+        } 
+      };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to remove item from cart' 
+      };
+    }
+  }
+
+  static async getCart(userId: string): Promise<{ success: boolean; data?: CartItem[]; error?: string }> {
+    try {
+      // Check if running in browser
+      if (typeof window === "undefined") {
+        return { success: false, error: "getCart can only be called on the client." };
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Try to get cart from localStorage as mock data
+      const localCart = localStorage.getItem(`cart_${userId}`);
+      const cartItems = localCart ? JSON.parse(localCart) : [];
+      
+      return { success: true, data: cartItems };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to fetch cart",
+      };
+    }
+  }
+
+  static async syncCart(userId: string, localCart: CartItem[]): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      return { success: true, data: { synced: true } };
+    } catch (error) {
+      return { success: false, error: 'Sync failed' };
+    }
+  }
+
+  private static getAuthToken(): string {
+    if (typeof window === "undefined") return '';
+    return localStorage.getItem('authToken') || '';
+  }
+}
+
+export default function EnhancedShopPage() {
+  // Core state
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [wishlist, setWishlist] = useState<CartItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [cartError, setCartError] = useState<string | null>(null);
+  const [cartSyncStatus, setCartSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+
+  // User state - simplified initialization
+  const [userId, setUserId] = useState<string>('user_123');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Shop functionality state
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedBrand, setSelectedBrand] = useState("All");
@@ -88,15 +197,87 @@ export default function EnhancedShopPage() {
   
   // Cart notification state
   const [cartNotifications, setCartNotifications] = useState<CartNotification[]>([]);
+  
+  // Loading states for individual items
+  const [loadingItems, setLoadingItems] = useState<Set<string>>(new Set());
 
-  // Product catalog - Changed ids to strings
+  // Initialize user session
+  useEffect(() => {
+    const initializeUser = async () => {
+      setIsLoading(true);
+      
+      // Check for existing auth token
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        setIsAuthenticated(true);
+        setUserId(`user_${Math.random().toString(36).substr(2, 9)}`);
+      } else {
+        // Create guest session
+        const guestId = `guest_${Math.random().toString(36).substr(2, 9)}`;
+        setUserId(guestId);
+        localStorage.setItem('guestId', guestId);
+      }
+      
+      setIsLoading(false);
+    };
+
+    initializeUser();
+  }, []);
+
+  // Load cart when user is initialized
+  useEffect(() => {
+    if (userId) {
+      loadCartFromBackend();
+    }
+  }, [userId]);
+
+  const loadCartFromBackend = async () => {
+    if (!userId) return;
+    
+    setCartError(null);
+    setCartSyncStatus('syncing');
+    
+    const result = await CartApiService.getCart(userId);
+    
+    if (result.success && result.data) {
+      setCartItems(result.data);
+      setCartSyncStatus('synced');
+    } else {
+      setCartError(result.error || 'Failed to load cart');
+      setCartSyncStatus('error');
+    }
+  };
+
+  // Save cart to localStorage as backup
+  useEffect(() => {
+    if (userId && cartItems.length >= 0) {
+      localStorage.setItem(`cart_${userId}`, JSON.stringify(cartItems));
+    }
+  }, [cartItems, userId]);
+
+  // Auto-dismiss notifications after 4 seconds
+  useEffect(() => {
+    if (cartNotifications.length === 0) return;
+
+    const timers = cartNotifications.map(notification => 
+      setTimeout(() => {
+        setCartNotifications(prev => prev.filter(n => n.id !== notification.id));
+      }, 4000)
+    );
+
+    return () => {
+      timers.forEach(timer => clearTimeout(timer));
+    };
+  }, [cartNotifications]);
+
+  // Enhanced product catalog
   const products: Product[] = [
     {
       id: "1",
       name: "Scandinavian Modern Sofa",
       price: 1299,
       originalPrice: 1599,
-      image: "/home.webp",
+      image: "/api/placeholder/400/300",
       category: "Furniture",
       brand: "Nordic Design",
       rating: 4.8,
@@ -116,7 +297,7 @@ export default function EnhancedShopPage() {
       id: "2",
       name: "Executive Leather Chair",
       price: 899,
-      image: "/home.webp",
+      image: "/api/placeholder/400/300",
       category: "Furniture",
       brand: "Office Elite",
       rating: 4.6,
@@ -137,7 +318,7 @@ export default function EnhancedShopPage() {
       name: "Crystal Chandelier Deluxe",
       price: 1899,
       originalPrice: 2299,
-      image: "/home.webp",
+      image: "/api/placeholder/400/300",
       category: "Lighting",
       brand: "Illumina",
       rating: 4.9,
@@ -157,7 +338,7 @@ export default function EnhancedShopPage() {
       id: "4",
       name: "Minimalist Coffee Table",
       price: 399,
-      image: "/home.webp",
+      image: "/api/placeholder/400/300",
       category: "Furniture",
       brand: "Zen Living",
       rating: 4.5,
@@ -178,7 +359,7 @@ export default function EnhancedShopPage() {
       name: "Industrial Floor Lamp",
       price: 249,
       originalPrice: 299,
-      image: "/home.webp",
+      image: "/api/placeholder/400/300",
       category: "Lighting",
       brand: "Urban Light Co.",
       rating: 4.3,
@@ -198,7 +379,7 @@ export default function EnhancedShopPage() {
       id: "6",
       name: "Luxury Velvet Armchair",
       price: 799,
-      image: "/home.webp",
+      image: "/api/placeholder/400/300",
       category: "Furniture",
       brand: "Royal Comfort",
       rating: 4.7,
@@ -216,22 +397,11 @@ export default function EnhancedShopPage() {
     }
   ];
 
-  // Auto-dismiss notifications after 4 seconds
-  useEffect(() => {
-    cartNotifications.forEach(notification => {
-      const timer = setTimeout(() => {
-        setCartNotifications(prev => prev.filter(n => n.id !== notification.id));
-      }, 4000);
-
-      return () => clearTimeout(timer);
-    });
-  }, [cartNotifications]);
-
   // Get unique categories and brands
-  const categories = ["All", ...Array.from(new Set(products.map(p => p.category)))];
-  const brands = ["All", ...Array.from(new Set(products.map(p => p.brand)))];
+  const categories = useMemo(() => ["All", ...Array.from(new Set(products.map(p => p.category)))], []);
+  const brands = useMemo(() => ["All", ...Array.from(new Set(products.map(p => p.brand)))], []);
 
-  // Filter and sort logic
+  // Enhanced filter and sort logic
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
       const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -265,8 +435,17 @@ export default function EnhancedShopPage() {
     }
   }, [filteredProducts, sortBy]);
 
+  // Helper functions
+  const getTotalItems = () => {
+    return cartItems.reduce((total, item) => total + item.quantity, 0);
+  };
+
+  const getSubtotal = () => {
+    return cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+  };
+
   // Convert Product to CartItem format
-  const productToCartItem = (product: Product, quantity: number = 1) => {
+  const productToCartItem = (product: Product, quantity: number = 1): CartItem => {
     const variants = selectedVariants[product.id];
     return {
       id: product.id,
@@ -281,49 +460,160 @@ export default function EnhancedShopPage() {
     };
   };
 
-  // Enhanced cart functions with notifications
-  const handleAddToCart = (product: Product, quantity: number = 1) => {
+  // Enhanced cart functions
+  const handleAddToCart = async (product: Product, quantity: number = 1) => {
     const cartItem = productToCartItem(product, quantity);
-    addToCart(cartItem);
     
-    // Create notification
-    const notification: CartNotification = {
-      id: `${product.id}-${Date.now()}`,
-      product,
-      quantity,
-      timestamp: Date.now()
-    };
+    setLoadingItems(prev => new Set(prev).add(product.id));
+    setCartError(null);
     
-    setCartNotifications(prev => [...prev, notification]);
-  };
+    // Optimistically update UI
+    const existingItem = cartItems.find(item => item.id === product.id);
+    if (existingItem) {
+      setCartItems(prev => prev.map(item => 
+        item.id === product.id 
+          ? { ...item, quantity: item.quantity + quantity }
+          : item
+      ));
+    } else {
+      setCartItems(prev => [...prev, cartItem]);
+    }
 
-  const handleUpdateQuantity = (productId: string, change: number) => {
-    const currentItem = cartItems.find(item => item.id === productId);
-    if (currentItem) {
-      const newQuantity = currentItem.quantity + change;
-      if (newQuantity <= 0) {
-        removeFromCart(productId);
+    try {
+      const result = await CartApiService.addToCart(userId, cartItem);
+      
+      if (!result.success) {
+        // Revert optimistic update on failure
+        if (existingItem) {
+          setCartItems(prev => prev.map(item => 
+            item.id === product.id 
+              ? { ...item, quantity: existingItem.quantity }
+              : item
+          ));
+        } else {
+          setCartItems(prev => prev.filter(item => item.id !== product.id));
+        }
+        
+        setCartError(result.error || 'Failed to add item to cart');
+        setCartSyncStatus('error');
       } else {
-        updateQuantity(productId, newQuantity);
+        setCartSyncStatus('synced');
+        
+        // Create notification
+        const notification: CartNotification = {
+          id: `${product.id}-${Date.now()}`,
+          product,
+          quantity,
+          timestamp: Date.now()
+        };
+        
+        setCartNotifications(prev => [...prev, notification]);
       }
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      setCartError('Network error. Please try again.');
+      setCartSyncStatus('error');
+    } finally {
+      setLoadingItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(product.id);
+        return newSet;
+      });
     }
   };
 
-  // Remove notification manually
-  const dismissNotification = (notificationId: string) => {
-    setCartNotifications(prev => prev.filter(n => n.id !== notificationId));
+  const handleUpdateQuantity = async (productId: string, newQuantity: number) => {
+    const currentItem = cartItems.find(item => item.id === productId);
+    if (!currentItem) return;
+
+    setLoadingItems(prev => new Set(prev).add(productId));
+    setCartError(null);
+    
+    // Optimistically update UI
+    if (newQuantity <= 0) {
+      setCartItems(prev => prev.filter(item => item.id !== productId));
+    } else {
+      setCartItems(prev => prev.map(item => 
+        item.id === productId 
+          ? { ...item, quantity: newQuantity }
+          : item
+      ));
+    }
+
+    try {
+      let result;
+      if (newQuantity <= 0) {
+        result = await CartApiService.removeFromCart(userId, productId);
+      } else {
+        result = await CartApiService.updateCartItem(userId, productId, newQuantity);
+      }
+      
+      if (!result.success) {
+        // Revert optimistic update on failure
+        setCartItems(prev => prev.map(item => 
+          item.id === productId 
+            ? { ...item, quantity: currentItem.quantity }
+            : item
+        ));
+        
+        setCartError(result.error || 'Failed to update cart item');
+        setCartSyncStatus('error');
+      } else {
+        setCartSyncStatus('synced');
+      }
+    } catch (error) {
+      console.error('Error updating cart item:', error);
+      setCartError('Network error. Please try again.');
+      setCartSyncStatus('error');
+    } finally {
+      setLoadingItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(productId);
+        return newSet;
+      });
+    }
+  };
+
+  const handleRemoveFromCart = async (productId: string) => {
+    const currentItem = cartItems.find(item => item.id === productId);
+    if (!currentItem) return;
+
+    setLoadingItems(prev => new Set(prev).add(productId));
+    setCartError(null);
+    
+    setCartItems(prev => prev.filter(item => item.id !== productId));
+
+    try {
+      const result = await CartApiService.removeFromCart(userId, productId);
+      
+      if (!result.success) {
+        setCartItems(prev => [...prev, currentItem]);
+        setCartError(result.error || 'Failed to remove item from cart');
+        setCartSyncStatus('error');
+      } else {
+        setCartSyncStatus('synced');
+      }
+    } catch (error) {
+      console.error('Error removing from cart:', error);
+      setCartError('Network error. Please try again.');
+      setCartSyncStatus('error');
+    } finally {
+      setLoadingItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(productId);
+        return newSet;
+      });
+    }
   };
 
   // Wishlist functions
   const toggleWishlist = (product: Product) => {
     const isInWishlist = wishlist.some(item => item.id === product.id);
     if (isInWishlist) {
-      removeFromWishlist(product.id);
+      setWishlist(prev => prev.filter(item => item.id !== product.id));
     } else {
       const cartItem = productToCartItem(product);
-      // Add to wishlist through context (you might need to add this function to context)
-      // For now, we'll simulate it
-      console.log("Toggle wishlist for:", product.id);
+      setWishlist(prev => [...prev, cartItem]);
     }
   };
 
@@ -339,30 +629,25 @@ export default function EnhancedShopPage() {
     setSearchQuery("");
   };
 
-  // Cart Notification Component
+  const dismissNotification = (notificationId: string) => {
+    setCartNotifications(prev => prev.filter(n => n.id !== notificationId));
+  };
+
+  const retryCartSync = async () => {
+    await loadCartFromBackend();
+  };
+
+  // Component definitions
   const CartNotificationPopup = ({ notification, onDismiss }: { 
     notification: CartNotification; 
     onDismiss: () => void;
   }) => (
-    <motion.div
-      initial={{ opacity: 0, x: 400, scale: 0.3 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={{ opacity: 0, x: 400, scale: 0.5 }}
-      transition={{ 
-        type: "spring", 
-        stiffness: 500, 
-        damping: 25,
-        duration: 0.3
-      }}
-      className="bg-white rounded-xl shadow-2xl border border-gray-200 p-4 max-w-sm w-full"
-    >
+    <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-4 max-w-sm w-full">
       <div className="flex items-start gap-3">
-        {/* Success Icon */}
         <div className="bg-green-500 rounded-full p-2 flex-shrink-0">
           <Check className="h-4 w-4 text-white" />
         </div>
         
-        {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between">
             <div className="flex-1">
@@ -391,7 +676,6 @@ export default function EnhancedShopPage() {
             </button>
           </div>
           
-          {/* Product Image */}
           <div className="mt-3 flex items-center gap-3">
             <img 
               src={notification.product.image} 
@@ -410,7 +694,6 @@ export default function EnhancedShopPage() {
         </div>
       </div>
       
-      {/* Action Buttons */}
       <div className="flex gap-2 mt-4">
         <button
           onClick={onDismiss}
@@ -421,7 +704,6 @@ export default function EnhancedShopPage() {
         <button 
           onClick={() => {
             onDismiss();
-            // Navigate to cart - you might want to add this functionality
             console.log("Navigate to cart");
           }}
           className="flex-1 py-2 px-3 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors"
@@ -429,122 +711,71 @@ export default function EnhancedShopPage() {
           View Cart
         </button>
       </div>
-    </motion.div>
+    </div>
   );
 
-  // Quick View Modal (keeping existing functionality)
-  const QuickViewModal = ({ product, onClose }: { product: Product; onClose: () => void }) => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex justify-between items-start mb-6">
-            <h2 className="text-2xl font-bold">{product.name}</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-              <X className="h-6 w-6" />
-            </button>
+  const ErrorBanner = () => {
+    if (!cartError) return null;
+    
+    return (
+      <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <AlertCircle className="h-5 w-5 text-red-400" />
           </div>
-          
-          <div className="grid md:grid-cols-2 gap-8">
-            <div>
-              <img src={product.image} alt={product.name} className="w-full rounded-lg" />
-            </div>
-            
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="flex">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className={`h-5 w-5 ${i < Math.floor(product.rating) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
-                  ))}
-                </div>
-                <span className="text-gray-600">({product.reviewCount} reviews)</span>
-              </div>
-              
-              <p className="text-gray-700 mb-6">{product.description}</p>
-              
-              <div className="space-y-4 mb-6">
-                <div>
-                  <h4 className="font-medium mb-2">Colors:</h4>
-                  <div className="flex gap-2">
-                    {product.colors.map(color => (
-                      <button 
-                        key={color} 
-                        onClick={() => setSelectedVariants(prev => ({
-                          ...prev,
-                          [product.id]: { ...prev[product.id], color }
-                        }))}
-                        className={`px-3 py-1 border rounded-full text-sm hover:bg-gray-50 ${
-                          selectedVariants[product.id]?.color === color ? 'bg-indigo-100 border-indigo-300' : ''
-                        }`}
-                      >
-                        {color}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                
-                <div>
-                  <h4 className="font-medium mb-2">Sizes:</h4>
-                  <div className="flex gap-2">
-                    {product.sizes.map(size => (
-                      <button 
-                        key={size}
-                        onClick={() => setSelectedVariants(prev => ({
-                          ...prev,
-                          [product.id]: { ...prev[product.id], size }
-                        }))}
-                        className={`px-3 py-1 border rounded-full text-sm hover:bg-gray-50 ${
-                          selectedVariants[product.id]?.size === size ? 'bg-indigo-100 border-indigo-300' : ''
-                        }`}
-                      >
-                        {size}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                
-                <div>
-                  <h4 className="font-medium mb-2">Features:</h4>
-                  <ul className="space-y-1">
-                    {product.features.map(feature => (
-                      <li key={feature} className="flex items-center gap-2 text-sm text-gray-600">
-                        <Check className="h-4 w-4 text-green-500" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-4 mb-6">
-                <span className="text-3xl font-bold text-indigo-600">${product.price}</span>
-                {product.originalPrice && (
-                  <span className="text-lg text-gray-500 line-through">${product.originalPrice}</span>
-                )}
-              </div>
-              
+          <div className="ml-3 flex-1">
+            <p className="text-sm text-red-700">{cartError}</p>
+          </div>
+          <div className="pl-3">
+            <div className="flex space-x-2">
               <button
-                onClick={() => {
-                  handleAddToCart(product);
-                  onClose();
-                }}
-                disabled={!product.inStock}
-                className="w-full py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                onClick={retryCartSync}
+                className="text-sm text-red-600 hover:text-red-500 font-medium"
               >
-                {product.inStock ? 'Add to Cart' : 'Out of Stock'}
+                Retry
+              </button>
+              <button
+                onClick={() => setCartError(null)}
+                className="text-sm text-red-600 hover:text-red-500"
+              >
+                Dismiss
               </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
+
+  const SyncStatusIndicator = () => {
+    if (cartSyncStatus === 'synced' || cartSyncStatus === 'idle') return null;
+    
+    return (
+      <div className={`fixed top-16 right-4 z-40 px-3 py-2 rounded-lg shadow-md text-sm ${
+        cartSyncStatus === 'syncing' 
+          ? 'bg-yellow-100 text-yellow-800' 
+          : 'bg-red-100 text-red-800'
+      }`}>
+        <div className="flex items-center gap-2">
+          {cartSyncStatus === 'syncing' ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <AlertCircle className="h-4 w-4" />
+          )}
+          <span>
+            {cartSyncStatus === 'syncing' ? 'Syncing cart...' : 'Cart sync failed'}
+          </span>
+        </div>
+      </div>
+    );
+  };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p>Loading shop...</p>
+          <p className="text-gray-600">Loading shop...</p>
         </div>
       </div>
     );
@@ -552,18 +783,23 @@ export default function EnhancedShopPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Cart Notifications - Fixed positioning */}
+      <SyncStatusIndicator />
+
+      {/* Cart Notifications */}
       <div className="fixed top-4 right-4 z-50 space-y-3 pointer-events-none">
-        <AnimatePresence mode="popLayout">
-          {cartNotifications.map((notification) => (
-            <div key={notification.id} className="pointer-events-auto">
-              <CartNotificationPopup
-                notification={notification}
-                onDismiss={() => dismissNotification(notification.id)}
-              />
-            </div>
-          ))}
-        </AnimatePresence>
+        {cartNotifications.map((notification) => (
+          <div key={notification.id} className="pointer-events-auto">
+            <CartNotificationPopup
+              notification={notification}
+              onDismiss={() => dismissNotification(notification.id)}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Error Banner */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+        <ErrorBanner />
       </div>
 
       {/* Header */}
@@ -578,16 +814,26 @@ export default function EnhancedShopPage() {
               </div>
             </div>
             
-            {/* Search Bar */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <input
-                type="text"
-                placeholder="Search products..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+            <div className="flex items-center gap-4">
+              {/* Search Bar */}
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* User Info */}
+              <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg">
+                <User className="h-4 w-4 text-gray-600" />
+                <span className="text-sm text-gray-700">
+                  {isAuthenticated ? 'Welcome back!' : 'Guest User'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -773,14 +1019,22 @@ export default function EnhancedShopPage() {
               {sortedProducts.map(product => {
                 const cartItem = cartItems.find(item => item.id === product.id);
                 const quantityInCart = cartItem?.quantity || 0;
+                const isItemLoading = loadingItems.has(product.id);
 
                 return (
                   <div
                     key={product.id}
-                    className={`bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow group ${
+                    className={`bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow group relative ${
                       viewMode === "list" ? "flex" : ""
-                    }`}
+                    } ${isItemLoading ? 'opacity-75' : ''}`}
                   >
+                    {/* Loading Overlay */}
+                    {isItemLoading && (
+                      <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-10 rounded-xl">
+                        <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                      </div>
+                    )}
+
                     {/* Product Image */}
                     <div className={`relative ${viewMode === "list" ? "w-64 flex-shrink-0" : ""}`}>
                       <img
@@ -846,7 +1100,7 @@ export default function EnhancedShopPage() {
                     <div className={`p-6 ${viewMode === "list" ? "flex-1" : ""}`}>
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition line-clamp-1">
+                          <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition">
                             {product.name}
                           </h3>
                           <p className="text-sm text-gray-500">{product.brand}</p>
@@ -923,21 +1177,24 @@ export default function EnhancedShopPage() {
                       {quantityInCart > 0 ? (
                         <div className="flex items-center gap-2 mb-2">
                           <button
-                            onClick={() => handleUpdateQuantity(product.id, -1)}
-                            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
+                            onClick={() => handleUpdateQuantity(product.id, quantityInCart - 1)}
+                            disabled={isItemLoading}
+                            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition disabled:opacity-50"
                           >
                             <Minus className="h-4 w-4" />
                           </button>
                           <span className="w-12 text-center font-semibold">{quantityInCart}</span>
                           <button
-                            onClick={() => handleUpdateQuantity(product.id, 1)}
-                            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
+                            onClick={() => handleUpdateQuantity(product.id, quantityInCart + 1)}
+                            disabled={isItemLoading}
+                            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition disabled:opacity-50"
                           >
                             <Plus className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => removeFromCart(product.id)}
-                            className="ml-2 px-3 py-1 text-sm text-red-600 hover:text-red-700"
+                            onClick={() => handleRemoveFromCart(product.id)}
+                            disabled={isItemLoading}
+                            className="ml-2 px-3 py-1 text-sm text-red-600 hover:text-red-700 disabled:opacity-50"
                           >
                             Remove
                           </button>
@@ -945,15 +1202,19 @@ export default function EnhancedShopPage() {
                       ) : (
                         <button
                           onClick={() => handleAddToCart(product)}
-                          disabled={!product.inStock}
+                          disabled={!product.inStock || isItemLoading}
                           className={`w-full py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
-                            product.inStock
+                            product.inStock && !isItemLoading
                               ? "bg-indigo-600 text-white hover:bg-indigo-700"
                               : "bg-gray-200 text-gray-500 cursor-not-allowed"
                           }`}
                         >
-                          <ShoppingCart className="h-4 w-4" />
-                          {product.inStock ? "Add to Cart" : "Out of Stock"}
+                          {isItemLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <ShoppingCart className="h-4 w-4" />
+                          )}
+                          {!product.inStock ? "Out of Stock" : isItemLoading ? "Adding..." : "Add to Cart"}
                         </button>
                       )}
                     </div>
@@ -986,11 +1247,7 @@ export default function EnhancedShopPage() {
 
       {/* Floating Cart Summary */}
       {getTotalItems() > 0 && (
-        <motion.div 
-          initial={{ opacity: 0, y: 100 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-6 right-6 bg-indigo-600 text-white rounded-xl shadow-lg p-4 z-40"
-        >
+        <div className="fixed bottom-6 right-6 bg-indigo-600 text-white rounded-xl shadow-lg p-4 z-40">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <ShoppingCart className="h-5 w-5" />
@@ -1004,50 +1261,61 @@ export default function EnhancedShopPage() {
               View Cart
             </button>
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Quick View Modal */}
       {showQuickView && (
-        <QuickViewModal 
-          product={showQuickView} 
-          onClose={() => setShowQuickView(null)} 
-        />
-      )}
-
-      {/* Recently Viewed */}
-      <div className="bg-white py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl font-bold text-gray-900">Recently Viewed</h2>
-            <button className="text-indigo-600 hover:text-indigo-700 font-medium">
-              View All
-            </button>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {products.slice(0, 4).map(product => (
-              <div key={product.id} className="group cursor-pointer">
-                <div className="relative mb-3">
-                  <img 
-                    src={product.image} 
-                    alt={product.name}
-                    className="w-full h-40 object-cover rounded-lg group-hover:scale-105 transition-transform"
-                  />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-6">
+                <h2 className="text-2xl font-bold">{showQuickView.name}</h2>
+                <button onClick={() => setShowQuickView(null)} className="text-gray-400 hover:text-gray-600">
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-8">
+                <div>
+                  <img src={showQuickView.image} alt={showQuickView.name} className="w-full rounded-lg" />
+                </div>
+                
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="flex">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} className={`h-5 w-5 ${i < Math.floor(showQuickView.rating) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+                      ))}
+                    </div>
+                    <span className="text-gray-600">({showQuickView.reviewCount} reviews)</span>
+                  </div>
+                  
+                  <p className="text-gray-700 mb-6">{showQuickView.description}</p>
+                  
+                  <div className="flex items-center gap-4 mb-6">
+                    <span className="text-3xl font-bold text-indigo-600">${showQuickView.price}</span>
+                    {showQuickView.originalPrice && (
+                      <span className="text-lg text-gray-500 line-through">${showQuickView.originalPrice}</span>
+                    )}
+                  </div>
+                  
                   <button
-                    onClick={() => handleAddToCart(product)}
-                    className="absolute bottom-2 right-2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => {
+                      handleAddToCart(showQuickView);
+                      setShowQuickView(null);
+                    }}
+                    disabled={!showQuickView.inStock}
+                    className="w-full py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
-                    <Plus className="h-4 w-4 text-indigo-600" />
+                    {showQuickView.inStock ? 'Add to Cart' : 'Out of Stock'}
                   </button>
                 </div>
-                <h3 className="font-medium text-sm mb-1 line-clamp-1">{product.name}</h3>
-                <p className="text-indigo-600 font-semibold">${product.price}</p>
               </div>
-            ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
