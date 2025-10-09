@@ -618,22 +618,22 @@ const AuthModal = () => {
                   Lighting
                 </Link>
                 <Link
-                  href="/decor"
-                  className="text-gray-500 hover:text-amber-600 transition"
-                >
-                  Decor
-                </Link>
-                <Link
                   href="/services"
                   className="text-gray-500 hover:text-amber-600 transition"
                 >
-                  Design Services
+                   Design Services
                 </Link>
                 <Link
-                  href="/sale"
+                  href="/about"
+                  className="text-gray-500 hover:text-amber-600 transition"
+                >
+                 About Us
+                </Link>
+                <Link
+                  href="/contact"
                   className="text-red-600 hover:text-red-700 font-medium transition"
                 >
-                  Sale
+                  Contact
                 </Link>
               </nav>
             </div>
@@ -764,9 +764,10 @@ const AuthModal = () => {
 
               {/* Shopping Cart with Enhanced Preview */}
               <div className="relative" ref={cartRef}>
+                <a href="/cart" >
                 <button
                   onClick={() => setShowCartPreview(!showCartPreview)}
-                  className="text-gray-700 hover:text-amber-600 transition relative group p-1"
+                  className="text-gray-700 hover:text-amber-600 transition relative group p-1 cursor-pointer"
                 >
                   <ShoppingCart className="h-5 w-5 sm:h-6 sm:w-6" />
                   {getTotalItems() > 0 && (
@@ -781,6 +782,7 @@ const AuthModal = () => {
                     </div>
                   )}
                 </button>
+                </a>
 
                 {/* Cart Preview Dropdown */}
                 <CartPreview 

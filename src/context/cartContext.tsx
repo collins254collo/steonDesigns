@@ -9,7 +9,7 @@ type CartItem = {
   originalPrice?: number;
   image: string;
   quantity: number;
-  category: string; // Fixed: Changed from ReactNode to string
+  category: string; 
   inStock?: boolean;
   // Optional: Add product variants
   variant?: {

@@ -42,6 +42,7 @@ import {
   Link
 } from "lucide-react";
 
+
 export default function EnhancedInteriorEcommerce() {
   const [cartItems, setCartItems] = useState<(Product & { quantity: number })[]>([]);
   const [wishlist, setWishlist] = useState<number[]>([]);
@@ -140,21 +141,21 @@ export default function EnhancedInteriorEcommerce() {
 
   const testimonials = [
     {
-      name: "Sarah Johnson",
+      name: "Simon Miller",
       role: "Homeowner",
       content: "The quality exceeded my expectations. Fast delivery and excellent customer service made the experience seamless.",
       rating: 5,
       verified: true
     },
     {
-      name: "Michael Chen", 
+      name: "Colleen Smith", 
       role: "Business Owner",
       content: "Professional design consultation helped us create the perfect office space. Our productivity has increased significantly.",
       rating: 5,
       verified: true
     },
     {
-      name: "Emma Rodriguez",
+      name: "Emmanuel Sanders",
       role: "Interior Designer",
       content: "As a professional, I appreciate the quality and variety. My clients love the pieces I source from here.",
       rating: 5,
@@ -199,14 +200,19 @@ export default function EnhancedInteriorEcommerce() {
             Shop premium furniture and décor from award-winning designers, or book a consultation to transform your space.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button className="px-8 py-4 bg-amber-600 text-white font-semibold rounded-full hover:bg-amber-700 transition flex items-center justify-center gap-2 cursor-pointer">
-              <ShoppingBag className="h-5 w-5" />
-              Shop Collection
-            </button>
-            <button className="px-8 py-4 border-2 border-white text-white font-semibold rounded-full hover:bg-white hover:text-gray-900 transition cursor-pointer">
-              Book Consultation
-            </button>
-          </div>
+              <a 
+                href="/shop"
+                className="px-8 py-4 bg-amber-600 text-white font-bold rounded-full hover:bg-amber-700 transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <ShoppingBag className="h-5 w-5" />
+                Shop Collection
+              </a>
+              <a href="/contact" >
+              <button className="px-8 py-4 border-2 border-white text-white font-bold rounded-full hover:bg-white hover:text-gray-900 transition cursor-pointer">
+                Book Consultation
+              </button>
+              </a>
+            </div>
         </div>
       </section>
 
@@ -216,22 +222,22 @@ export default function EnhancedInteriorEcommerce() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
             <div className="flex flex-col items-center">
               <Truck className="h-8 w-8 text-amber-600 mb-2" />
-              <span className="font-semibold">Free Delivery</span>
+              <span className="font-bold text-gray-900">Free Delivery</span>
               <span className="text-sm text-gray-600">Orders over $500</span>
             </div>
             <div className="flex flex-col items-center">
               <Shield className="h-8 w-8 text-amber-600 mb-2" />
-              <span className="font-semibold">Secure Payment</span>
+              <span className="font-bold text-gray-900">Secure Payment</span>
               <span className="text-sm text-gray-600">SSL encrypted</span>
             </div>
             <div className="flex flex-col items-center">
               <RotateCcw className="h-8 w-8 text-amber-600 mb-2" />
-              <span className="font-semibold">Easy Returns</span>
+              <span className="font-bold text-gray-900">Easy Returns</span>
               <span className="text-sm text-gray-600">30-day policy</span>
             </div>
             <div className="flex flex-col items-center">
               <Headphones className="h-8 w-8 text-amber-600 mb-2" />
-              <span className="font-semibold">Expert Support</span>
+              <span className="font-bold text-gray-900">Expert Support</span>
               <span className="text-sm text-gray-600">Design consultation</span>
             </div>
           </div>
@@ -246,8 +252,7 @@ export default function EnhancedInteriorEcommerce() {
             Our Premium Collection
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Discover our carefully curated selection of premium furniture and decor pieces, 
-            designed to transform your space into something extraordinary.
+           Where design meets emotion — discover furniture that inspires the way you live.
           </p>
         </div>
 
@@ -271,7 +276,7 @@ export default function EnhancedInteriorEcommerce() {
               {/* Product Info */}
               <div className="p-6">
                 <div className="mb-3">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-amber-600 transition-colors">
+                  <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-amber-600 transition-colors">
                     {product.name}
                   </h3>
                   <p className="text-gray-600 text-sm leading-relaxed">
@@ -304,7 +309,9 @@ export default function EnhancedInteriorEcommerce() {
                     ${product.price.toLocaleString()}
                   </div>
                   <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center group-hover:bg-amber-200 transition-colors">
+                    <a href={`/product/${product.id}`} className="inline-flex items-center justify-center text-amber-600 hover:text-amber-700">
                     <ArrowRight className="h-4 w-4 text-amber-600" />
+                    </a>
                   </div>
                 </div>
               </div>
@@ -320,7 +327,7 @@ export default function EnhancedInteriorEcommerce() {
             </p>
             <Link
               href="/shop"
-              className="inline-flex items-center space-x-2 bg-amber-600 text-white px-8 py-4 rounded-full font-semibold text-lg hover:bg-amber-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1 cursor-pointer"
+              className="inline-flex items-center space-x-2 bg-amber-600 text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-amber-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1 cursor-pointer"
             >
               <span>Shop All Products</span>
               <ArrowRight className="h-5 w-5" />
@@ -353,7 +360,7 @@ export default function EnhancedInteriorEcommerce() {
                   {service.icon}
                   <span className="text-2xl font-bold text-amber-600">{service.price}</span>
                 </div>
-                <h3 className="text-xl font-bold mb-3">{service.title}</h3>
+                <h3 className="text-xl font-bold text-gray-600 mb-3">{service.title}</h3>
                 <p className="text-gray-600 mb-4">{service.description}</p>
                 <ul className="space-y-2 mb-6">
                   {service.features.map((feature, i) => (
@@ -363,9 +370,12 @@ export default function EnhancedInteriorEcommerce() {
                     </li>
                   ))}
                 </ul>
-                <button className="w-full px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition">
+                <a href="/contact" >
+                  
+                <button className="w-full px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition cursor-pointer">
                   Book Consultation
                 </button>
+                </a>
               </div>
             ))}
           </div>
@@ -417,7 +427,7 @@ export default function EnhancedInteriorEcommerce() {
                     {testimonial.name[0]}
                   </div>
                   <div>
-                    <h4 className="font-semibold text-gray-900">{testimonial.name}</h4>
+                    <h4 className="font-bold text-gray-900">{testimonial.name}</h4>
                     <p className="text-sm text-gray-600">{testimonial.role}</p>
                   </div>
                 </div>
@@ -442,7 +452,7 @@ export default function EnhancedInteriorEcommerce() {
               placeholder="Enter your email"
               className="flex-1 px-6 py-3 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-white"
             />
-            <button className="px-8 py-3 bg-white text-amber-600 font-semibold rounded-full hover:bg-gray-100 transition">
+            <button className="px-8 py-3 bg-white text-amber-600 font-bold rounded-full hover:bg-gray-100 transition">
               Subscribe
             </button>
           </div>

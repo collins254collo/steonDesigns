@@ -71,10 +71,12 @@ export default function CartPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            <button className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
-              <ArrowLeft className="h-5 w-5" />
+            <a href="/shop" >
+            <button className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors cursor-pointer">
+              <ArrowLeft className="h-5 w-5  hover:text-gray-900 transition-colors" />
               Continue Shopping
             </button>
+            </a>
           </div>
           <div className="flex items-center gap-4">
             <h1 className="text-3xl font-bold flex items-center gap-3">
@@ -129,9 +131,11 @@ export default function CartPage() {
             <ShoppingCart className="h-16 w-16 text-gray-300 mx-auto mb-4" />
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Your cart is empty</h2>
             <p className="text-gray-600 mb-6">Looks like you haven't added anything to your cart yet</p>
-            <button className="bg-amber-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-amber-700 transition-colors">
+            <a href="/shop" >
+            <button className="bg-amber-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-amber-700 transition-colors cursor-pointer">
               Start Shopping
             </button>
+            </a>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

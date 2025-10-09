@@ -277,7 +277,7 @@ export default function EnhancedShopPage() {
       name: "Scandinavian Modern Sofa",
       price: 1299,
       originalPrice: 1599,
-      image: "/api/placeholder/400/300",
+      image: "/kitchen.jpg",
       category: "Furniture",
       brand: "Nordic Design",
       rating: 4.8,
@@ -297,7 +297,7 @@ export default function EnhancedShopPage() {
       id: "2",
       name: "Executive Leather Chair",
       price: 899,
-      image: "/api/placeholder/400/300",
+      image: "/home.webp",
       category: "Furniture",
       brand: "Office Elite",
       rating: 4.6,
@@ -318,7 +318,7 @@ export default function EnhancedShopPage() {
       name: "Crystal Chandelier Deluxe",
       price: 1899,
       originalPrice: 2299,
-      image: "/api/placeholder/400/300",
+      image: "/kitchen.jpg",
       category: "Lighting",
       brand: "Illumina",
       rating: 4.9,
@@ -338,7 +338,7 @@ export default function EnhancedShopPage() {
       id: "4",
       name: "Minimalist Coffee Table",
       price: 399,
-      image: "/api/placeholder/400/300",
+      image: "/home.webp",
       category: "Furniture",
       brand: "Zen Living",
       rating: 4.5,
@@ -359,7 +359,7 @@ export default function EnhancedShopPage() {
       name: "Industrial Floor Lamp",
       price: 249,
       originalPrice: 299,
-      image: "/api/placeholder/400/300",
+      image: "/kitchen.jpg",
       category: "Lighting",
       brand: "Urban Light Co.",
       rating: 4.3,
@@ -379,7 +379,7 @@ export default function EnhancedShopPage() {
       id: "6",
       name: "Luxury Velvet Armchair",
       price: 799,
-      image: "/api/placeholder/400/300",
+      image: "/home.webp",
       category: "Furniture",
       brand: "Royal Comfort",
       rating: 4.7,
@@ -701,6 +701,7 @@ export default function EnhancedShopPage() {
         >
           Continue Shopping
         </button>
+        <a href="/cart " >
         <button 
           onClick={() => {
             onDismiss();
@@ -710,6 +711,7 @@ export default function EnhancedShopPage() {
         >
           View Cart
         </button>
+        </a>
       </div>
     </div>
   );
@@ -1257,9 +1259,11 @@ export default function EnhancedShopPage() {
               ${getSubtotal().toFixed(2)}
             </div>
             
+            <a href="/cart">
             <button className="bg-white text-indigo-600 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 transition">
               View Cart
             </button>
+            </a>
           </div>
         </div>
       )}
